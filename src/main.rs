@@ -9,7 +9,8 @@ fn main() {
         .add_plugin(SpinePlugin)
         .add_plugin(CursorPlugin)
         //.add_plugin(mix_and_match::MixAndMatchPlugin)
-        .add_plugin(owl::OwlPlugin)
+        //.add_plugin(owl::OwlPlugin)
+        .add_plugin(coin::CoinPlugin)
         .add_startup_system(setup)
         .run();
 }
@@ -18,6 +19,7 @@ fn setup(mut commands: Commands) {
     commands.spawn_bundle(Camera2dBundle::default());
 }
 
+pub mod coin;
 pub mod cursor;
 pub mod mix_and_match;
 pub mod owl;
