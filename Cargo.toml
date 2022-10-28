@@ -6,7 +6,9 @@ edition = "2021"
 [dependencies]
 bevy = { version = "0.8", features = [ "dynamic" ] }
 rand = "0.8"
-bevy_spine = { git = "https://github.com/jabuwu/bevy_spine", rev = "dff492584ef972da2ccb81ab567e4aebc51a3abc" }
+bevy_spine = { version = "0.3" }
+strum = "0.24"
+strum_macros = "0.24"
 
 [profile.dev.package."*"]
 opt-level = 3

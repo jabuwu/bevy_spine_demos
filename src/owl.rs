@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy_spine::prelude::*;
 
-use crate::cursor::Cursor;
+use crate::{cleanup, cursor::Cursor, instructions::InstructionsEvent, AppState};
 
 const OWL_IDLE: i32 = 0;
 const OWL_BLINK: i32 = 1;
@@ -15,12 +15,16 @@ pub struct OwlPlugin;
 impl Plugin for OwlPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<RandomizeEvent>()
-            .add_startup_system(owl_setup)
+            .add_system_set(SystemSet::on_enter(AppState::Owl).with_system(owl_setup))
+            .add_system_set(SystemSet::on_exit(AppState::Owl).with_system(cleanup))
             .add_system(owl_update)
             .add_system(owl_spawned)
             .add_system(owl_update);
     }
 }
+
+#[derive(Component)]
+pub struct Owl;
 
 #[derive(Default)]
 struct RandomizeEvent;
@@ -28,6 +32,7 @@ struct RandomizeEvent;
 fn owl_setup(
     mut commands: Commands,
     mut skeletons: ResMut<Assets<SkeletonData>>,
+    mut instructions_events: EventWriter<InstructionsEvent>,
     asset_server: Res<AssetServer>,
 ) {
     let skeleton = SkeletonData::new_from_json(
@@ -36,17 +41,23 @@ fn owl_setup(
     );
     let skeleton_handle = skeletons.add(skeleton);
 
-    commands.spawn_bundle(bevy_spine::SpineBundle {
-        skeleton: skeleton_handle.clone(),
-        transform: Transform::from_xyz(0., -170., 0.).with_scale(Vec3::ONE * 0.5),
-        ..Default::default()
-    });
+    commands
+        .spawn_bundle(bevy_spine::SpineBundle {
+            skeleton: skeleton_handle.clone(),
+            transform: Transform::from_xyz(0., -170., 0.).with_scale(Vec3::ONE * 0.5),
+            ..Default::default()
+        })
+        .insert(Owl);
+
+    instructions_events.send(InstructionsEvent(
+        "move the mouse and owl will follow your cursor",
+    ));
 }
 
 fn owl_spawned(
     mut spine_ready_event: EventReader<SpineReadyEvent>,
     mut randomize_events: EventWriter<RandomizeEvent>,
-    mut spine_query: Query<&mut Spine>,
+    mut spine_query: Query<&mut Spine, With<Owl>>,
 ) {
     for _ in spine_ready_event.iter() {
         randomize_events.send_default();
@@ -73,7 +84,7 @@ fn owl_spawned(
     }
 }
 
-fn owl_update(mut spine_query: Query<&mut Spine>, cursor: Res<Cursor>) {
+fn owl_update(mut spine_query: Query<&mut Spine, With<Owl>>, cursor: Res<Cursor>) {
     for mut spine in spine_query.iter_mut() {
         let magnitude = (cursor.position.length() / 300.).clamp(0., 1.);
         let look = cursor.position.normalize() * magnitude;
