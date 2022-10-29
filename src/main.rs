@@ -19,6 +19,13 @@ pub struct Persistent;
 fn main() {
     App::new()
         .insert_resource(ClearColor(Color::rgb(0.1, 0.1, 0.1)))
+        .insert_resource(WindowDescriptor {
+            width: 1024.,
+            height: 768.,
+            title: "Spine Demos".to_owned(),
+            canvas: Some("#bevy".to_owned()),
+            ..Default::default()
+        })
         .add_plugins(DefaultPlugins)
         .add_plugin(SpinePlugin)
         .add_plugin(CursorPlugin)
