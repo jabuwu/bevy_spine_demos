@@ -8,18 +8,16 @@ pub struct CoinPlugin;
 impl Plugin for CoinPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<RandomizeEvent>()
-            .add_system_set(SystemSet::on_enter(AppState::Coin).with_system(coin_setup))
-            .add_system_set(SystemSet::on_exit(AppState::Coin).with_system(cleanup))
-            .add_system(coin_update)
-            .add_system(coin_spawned)
-            .add_system(coin_update);
+            .add_systems(OnEnter(AppState::Coin), coin_setup)
+            .add_systems(OnExit(AppState::Coin), cleanup)
+            .add_systems(Update, (coin_update, coin_spawned, coin_update));
     }
 }
 
 #[derive(Component)]
 struct Coin;
 
-#[derive(Default)]
+#[derive(Default, Event)]
 struct RandomizeEvent;
 
 fn coin_setup(
@@ -34,13 +32,14 @@ fn coin_setup(
     );
     let skeleton_handle = skeletons.add(skeleton);
 
-    commands
-        .spawn_bundle(bevy_spine::SpineBundle {
+    commands.spawn((
+        bevy_spine::SpineBundle {
             skeleton: skeleton_handle.clone(),
             transform: Transform::from_xyz(0., 0., 0.).with_scale(Vec3::ONE),
             ..Default::default()
-        })
-        .insert(Coin);
+        },
+        Coin,
+    ));
 
     instructions_events.send(InstructionsEvent("move mouse to spin coin"));
 }
@@ -50,7 +49,7 @@ fn coin_spawned(
     mut randomize_events: EventWriter<RandomizeEvent>,
     mut spine_query: Query<&mut Spine, With<Coin>>,
 ) {
-    for _ in spine_ready_event.iter() {
+    for _ in spine_ready_event.read() {
         randomize_events.send_default();
         for mut spine in spine_query.iter_mut() {
             let mut track = spine

@@ -1,11 +1,11 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, sprite::Anchor, window::WindowResolution};
 use bevy_spine::prelude::*;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
 use crate::{cursor::CursorPlugin, instructions::InstructionsPlugin};
 
-#[derive(Default, Clone, Copy, PartialEq, Eq, Hash, Debug, EnumIter)]
+#[derive(Default, Clone, Copy, PartialEq, Eq, Hash, Debug, EnumIter, States)]
 pub enum AppState {
     #[default]
     MixAndMatch,
@@ -19,33 +19,33 @@ pub struct Persistent;
 fn main() {
     App::new()
         .insert_resource(ClearColor(Color::rgb(0.1, 0.1, 0.1)))
-        .insert_resource(WindowDescriptor {
-            width: 1024.,
-            height: 768.,
-            title: "Spine Demos".to_owned(),
-            canvas: Some("#bevy".to_owned()),
-            ..Default::default()
-        })
-        .add_plugins(DefaultPlugins)
-        .add_plugin(SpinePlugin)
-        .add_plugin(CursorPlugin)
-        .add_plugin(InstructionsPlugin)
-        .add_plugin(mix_and_match::MixAndMatchPlugin)
-        .add_plugin(owl::OwlPlugin)
-        .add_plugin(coin::CoinPlugin)
-        .add_state(AppState::default())
-        .add_startup_system(setup)
-        .add_system(next_demo)
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                resolution: WindowResolution::new(1024., 768.),
+                title: "Spine Demos".to_owned(),
+                ..Default::default()
+            }),
+            ..default()
+        }))
+        .add_plugins((
+            SpinePlugin,
+            CursorPlugin,
+            InstructionsPlugin,
+            mix_and_match::MixAndMatchPlugin,
+            owl::OwlPlugin,
+            coin::CoinPlugin,
+        ))
+        .init_state::<AppState>()
+        .add_systems(Startup, setup)
+        .add_systems(Update, next_demo)
         .run();
 }
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
-    commands
-        .spawn_bundle(Camera2dBundle::default())
-        .insert(Persistent);
+    commands.spawn(Camera2dBundle::default()).insert(Persistent);
 
-    commands
-        .spawn_bundle(Text2dBundle {
+    commands.spawn((
+        Text2dBundle {
             text: Text::from_section(
                 "press space for next demo",
                 TextStyle {
@@ -54,32 +54,35 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
                     color: Color::WHITE,
                 },
             )
-            .with_alignment(TextAlignment {
-                horizontal: HorizontalAlign::Center,
-                vertical: VerticalAlign::Center,
-            }),
+            .with_justify(JustifyText::Center),
+            text_anchor: Anchor::Center,
             transform: Transform::from_xyz(0., -320., 1.),
             ..Default::default()
-        })
-        .insert(Persistent);
+        },
+        Persistent,
+    ));
 }
 
 fn cleanup(
     mut commands: Commands,
-    entities: Query<Entity, (Without<Persistent>, Without<Parent>)>,
+    entities: Query<Entity, (Without<Persistent>, Without<Parent>, Without<Window>)>,
 ) {
     for entity in entities.iter() {
         commands.entity(entity).despawn_recursive();
     }
 }
 
-fn next_demo(mut app_state: ResMut<State<AppState>>, keys: Res<Input<KeyCode>>) {
+fn next_demo(
+    mut next_app_state: ResMut<NextState<AppState>>,
+    app_state: ResMut<State<AppState>>,
+    keys: Res<ButtonInput<KeyCode>>,
+) {
     if keys.just_pressed(KeyCode::Space) {
         let mut index = AppState::iter()
-            .position(|state| state == *app_state.current())
+            .position(|state| state == *app_state.get())
             .unwrap();
         index = (index + 1) % AppState::iter().count();
-        let _ = app_state.set(AppState::iter().nth(index).unwrap());
+        next_app_state.set(AppState::iter().nth(index).unwrap());
     }
 }
 

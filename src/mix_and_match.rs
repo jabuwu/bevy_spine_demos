@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_spine::{prelude::*, rusty_spine::Skin};
+use bevy_spine::prelude::*;
 use rand::{seq::SliceRandom, thread_rng};
 
 use crate::{cleanup, instructions::InstructionsEvent, AppState};
@@ -9,20 +9,23 @@ pub struct MixAndMatchPlugin;
 impl Plugin for MixAndMatchPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<RandomizeEvent>()
-            .add_system_set(
-                SystemSet::on_enter(AppState::MixAndMatch).with_system(mix_and_match_setup),
-            )
-            .add_system_set(SystemSet::on_exit(AppState::MixAndMatch).with_system(cleanup))
-            .add_system(mix_and_match_spawned)
-            .add_system(mix_and_match_dress_up.before(SpineSystem::Update))
-            .add_system(mix_and_match_input);
+            .add_systems(OnEnter(AppState::MixAndMatch), mix_and_match_setup)
+            .add_systems(OnExit(AppState::MixAndMatch), cleanup)
+            .add_systems(
+                Update,
+                (
+                    mix_and_match_spawned,
+                    mix_and_match_dress_up.before(SpineSystem::UpdateAnimation),
+                    mix_and_match_input,
+                ),
+            );
     }
 }
 
 #[derive(Component)]
 pub struct MixAndMatch;
 
-#[derive(Default)]
+#[derive(Default, Event)]
 struct RandomizeEvent;
 
 fn mix_and_match_setup(
@@ -37,13 +40,14 @@ fn mix_and_match_setup(
     );
     let skeleton_handle = skeletons.add(skeleton);
 
-    commands
-        .spawn_bundle(bevy_spine::SpineBundle {
+    commands.spawn((
+        bevy_spine::SpineBundle {
             skeleton: skeleton_handle.clone(),
             transform: Transform::from_xyz(0., -200., 0.).with_scale(Vec3::ONE * 0.5),
             ..Default::default()
-        })
-        .insert(MixAndMatch);
+        },
+        MixAndMatch,
+    ));
 
     instructions_events.send(InstructionsEvent("left click to randomize outfit"));
 }
@@ -53,7 +57,7 @@ fn mix_and_match_spawned(
     mut randomize_events: EventWriter<RandomizeEvent>,
     mut spine_query: Query<&mut Spine, With<MixAndMatch>>,
 ) {
-    for _ in spine_ready_event.iter() {
+    for _ in spine_ready_event.read() {
         randomize_events.send_default();
         for mut spine in spine_query.iter_mut() {
             let _ = spine.animation_state.set_animation_by_name(0, "idle", true);
@@ -65,13 +69,11 @@ fn mix_and_match_dress_up(
     mut spine_query: Query<&mut Spine, With<MixAndMatch>>,
     mut randomize_events: EventReader<RandomizeEvent>,
 ) {
-    for _ in randomize_events.iter() {
+    for _ in randomize_events.read() {
         for mut spine in spine_query.iter_mut() {
             let mut rng = thread_rng();
-            let skin = {
-                let skeleton_data = spine.skeleton.data();
-                let mut skin = Skin::new("custom");
-                let child_skins = [
+            let skins = {
+                [
                     "skin-base",
                     [
                         "accessories/backpack",
@@ -109,14 +111,10 @@ fn mix_and_match_dress_up(
                     .choose(&mut rng)
                     .unwrap(),
                     ["nose/long", "nose/short"].choose(&mut rng).unwrap(),
-                ];
-                for child_skin in child_skins.iter() {
-                    skin.add_skin(skeleton_data.find_skin(child_skin).unwrap().as_ref());
-                }
-                skin
+                ]
             };
 
-            let _ = spine.skeleton.set_skin(&skin);
+            let _ = spine.skeleton.set_skins_by_name("combined", skins);
 
             if spine
                 .animation_state
@@ -134,7 +132,7 @@ fn mix_and_match_dress_up(
 
 fn mix_and_match_input(
     mut randomize_events: EventWriter<RandomizeEvent>,
-    mouse_buttons: Res<Input<MouseButton>>,
+    mouse_buttons: Res<ButtonInput<MouseButton>>,
 ) {
     if mouse_buttons.just_pressed(MouseButton::Left) {
         randomize_events.send_default();

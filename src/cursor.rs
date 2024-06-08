@@ -1,6 +1,6 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, window::PrimaryWindow};
 
-#[derive(Debug, Hash, PartialEq, Eq, Clone, SystemLabel)]
+#[derive(Debug, Hash, PartialEq, Eq, Clone, SystemSet)]
 pub enum CursorSystem {
     Update,
 }
@@ -9,13 +9,12 @@ pub struct CursorPlugin;
 
 impl Plugin for CursorPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<Cursor>().add_system_to_stage(
-            CoreStage::PreUpdate,
-            cursor_position.label(CursorSystem::Update),
-        );
+        app.init_resource::<Cursor>()
+            .add_systems(PreUpdate, cursor_position.in_set(CursorSystem::Update));
     }
 }
 
+#[derive(Resource)]
 pub struct Cursor {
     pub position: Vec2,
 }
@@ -30,20 +29,21 @@ impl Default for Cursor {
 
 fn cursor_position(
     mut cursor: ResMut<Cursor>,
-    windows: Res<Windows>,
-    camera: Query<(&Camera, &GlobalTransform)>,
+    window_query: Query<&Window, With<PrimaryWindow>>,
+    camera_query: Query<(&Camera, &GlobalTransform)>,
 ) {
-    if let Some(window) = windows.get_primary() {
-        if let Some(position) = window.cursor_position() {
-            if let Ok((camera, camera_transform)) = camera.get_single() {
-                let window_size = Vec2::new(window.width() as f32, window.height() as f32);
-                let ndc = (position / window_size) * 2.0 - Vec2::ONE;
-                let ndc_to_world =
-                    camera_transform.compute_matrix() * camera.projection_matrix().inverse();
-                let world_pos = ndc_to_world.project_point3(ndc.extend(-1.0));
-                let world_pos: Vec2 = world_pos.truncate();
-                cursor.position = world_pos;
-            }
-        }
-    }
+    let Ok((camera, camera_global_transform)) = camera_query.get_single() else {
+        return;
+    };
+    let Ok(window) = window_query.get_single() else {
+        return;
+    };
+    let Some(cursor_position) = window
+        .cursor_position()
+        .and_then(|cursor| camera.viewport_to_world(camera_global_transform, cursor))
+        .map(|ray| ray.origin.truncate())
+    else {
+        return;
+    };
+    cursor.position = cursor_position;
 }

@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bevy = { version = "0.8" }
+bevy = "0.13"
+bevy_spine = "0.9"
 rand = "0.8"
-bevy_spine = { version = "0.3" }
 strum = "0.24"
 strum_macros = "0.24"
 
